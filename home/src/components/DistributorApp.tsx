@@ -1,12 +1,64 @@
 import { useMemo, useState } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
 import { Contract } from 'ethers';
+import { formatUnits, parseUnits } from 'viem';
 import { useEthersSigner } from '../hooks/useEthersSigner';
 import { useZamaInstance } from '../hooks/useZamaInstance';
 import { Header } from './Header';
 import { DISTRIBUTOR_ADDRESS, DISTRIBUTOR_ABI, CONFIDENTIAL_ETH_ABI, CONFIDENTIAL_ETH_ADDRESS } from '../config/contracts';
 
 type Row = { address: string; amount: string };
+
+const TOKEN_DECIMALS = 6;
+const MAX_UINT64 = (1n << 64n) - 1n;
+const MAX_DISPLAY_AMOUNT = formatUnits(MAX_UINT64, TOKEN_DECIMALS);
+
+function sanitizeAmountInput(value: string): string {
+  if (!value) return '';
+  let cleaned = '';
+  let dotSeen = false;
+  for (const char of value) {
+    if (char >= '0' && char <= '9') {
+      cleaned += char;
+    } else if (char === '.' && !dotSeen) {
+      dotSeen = true;
+      cleaned += '.';
+    }
+  }
+  if (!cleaned) return '';
+  if (!dotSeen) {
+    return cleaned;
+  }
+
+  const [wholeRaw, fractionalRaw = ''] = cleaned.split('.');
+  const fractional = fractionalRaw.slice(0, TOKEN_DECIMALS);
+  if (value.endsWith('.') && fractionalRaw.length === 0) {
+    return `${wholeRaw || '0'}.`;
+  }
+  return fractional.length > 0 ? `${wholeRaw || '0'}.${fractional}` : `${wholeRaw || '0'}`;
+}
+
+function parseAmountToUint64(value: string): bigint | null {
+  if (!value) return null;
+  try {
+    const parsed = parseUnits(value, TOKEN_DECIMALS);
+    if (parsed < 0 || parsed > MAX_UINT64) {
+      return null;
+    }
+    return parsed;
+  } catch (err) {
+    return null;
+  }
+}
+
+function formatAmountFromUint64(value: bigint | string): string {
+  try {
+    const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
+    return formatUnits(bigintValue, TOKEN_DECIMALS);
+  } catch (err) {
+    return '';
+  }
+}
 
 export function DistributorApp() {
   const { address: connected } = useAccount();
@@ -41,11 +93,29 @@ export function DistributorApp() {
   });
 
   const canSend = useMemo(() => {
-    return !!connected && !!instance && rows.every(r => r.address && r.amount && !Number.isNaN(parseInt(r.amount)));
+    if (!connected || !instance) return false;
+    return rows.every(row => {
+      if (!row.address) return false;
+      const parsed = parseAmountToUint64(row.amount);
+      return parsed !== null && parsed > 0n;
+    });
   }, [connected, instance, rows]);
 
+  const faucetAmountValid = useMemo(() => {
+    const parsed = parseAmountToUint64(faucetAmount);
+    return parsed !== null && parsed > 0n;
+  }, [faucetAmount]);
+
   const updateRow = (i: number, key: keyof Row, val: string) => {
-    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [key]: val } : r));
+    setRows(prev =>
+      prev.map((r, idx) => {
+        if (idx !== i) return r;
+        if (key === 'amount') {
+          return { ...r, amount: sanitizeAmountInput(val) };
+        }
+        return { ...r, address: val };
+      }),
+    );
   };
   const addRow = () => setRows(prev => [...prev, { address: '', amount: '' }]);
   const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
@@ -57,8 +127,19 @@ export function DistributorApp() {
     try {
       const signer = await signerPromise;
 
+      const parsedAmounts: bigint[] = [];
+      rows.forEach((row, index) => {
+        const parsed = parseAmountToUint64(row.amount);
+        if (parsed === null || parsed === 0n) {
+          throw new Error(`Error: invalid amount in row ${index + 1}`);
+        }
+        parsedAmounts.push(parsed);
+      });
+
       const input = instance.createEncryptedInput(DISTRIBUTOR_ADDRESS, await signer.getAddress());
-      for (const r of rows) input.add64(BigInt(r.amount));
+      for (const amount of parsedAmounts) {
+        input.add64(amount);
+      }
       const ciphertexts = await input.encrypt();
 
       setStatus('Sending transaction...');
@@ -74,7 +155,11 @@ export function DistributorApp() {
       await Promise.all([refetchUserBalance?.(), refetchCustomBalance?.()]);
     } catch (e) {
       console.error(e);
-      setStatus('Error: transaction failed');
+      if (e instanceof Error && e.message.startsWith('Error:')) {
+        setStatus(e.message);
+      } else {
+        setStatus('Error: transaction failed');
+      }
     } finally {
       setSending(false);
     }
@@ -106,7 +191,8 @@ export function DistributorApp() {
         { handle, contractAddress: CONFIDENTIAL_ETH_ADDRESS },
       ], keypair.privateKey, keypair.publicKey, signature.replace('0x',''), contractAddresses, owner, startTimeStamp, durationDays);
       const value = res[handle];
-      setBalance(String(value));
+      const formatted = formatAmountFromUint64(value);
+      setBalance(formatted || 'Error');
     } catch (e) {
       console.error(e);
       setBalance('Error');
@@ -131,18 +217,9 @@ export function DistributorApp() {
       return;
     }
     try {
-      if (!faucetAmount) {
-        setFaucetStatus('Error: amount required');
-        return;
-      }
-      const amount = BigInt(faucetAmount);
-      if (amount <= 0n) {
-        setFaucetStatus('Error: amount must be positive');
-        return;
-      }
-      const maxUint64 = 18446744073709551615n;
-      if (amount > maxUint64) {
-        setFaucetStatus('Error: amount exceeds uint64');
+      const parsedAmount = parseAmountToUint64(faucetAmount);
+      if (parsedAmount === null || parsedAmount === 0n) {
+        setFaucetStatus(`Error: amount must be greater than 0 and at most ${MAX_DISPLAY_AMOUNT}`);
         return;
       }
       setFaucetStatus('Requesting faucet...');
@@ -152,10 +229,10 @@ export function DistributorApp() {
         return;
       }
       const token = new Contract(CONFIDENTIAL_ETH_ADDRESS, CONFIDENTIAL_ETH_ABI as any, signer);
-      const tx = await token.mint(await signer.getAddress(), amount);
+      const tx = await token.mint(await signer.getAddress(), parsedAmount);
       setFaucetStatus(`Waiting for confirmation: ${tx.hash}`);
       await tx.wait();
-      setFaucetStatus('Faucet mint confirmed');
+      setFaucetStatus(`Faucet mint confirmed: ${formatAmountFromUint64(parsedAmount)} cETH`);
       await Promise.all([refetchUserBalance?.(), refetchCustomBalance?.()]);
     } catch (e) {
       console.error(e);
@@ -169,12 +246,21 @@ export function DistributorApp() {
       <main className="main-content">
         <div className="card" style={{ background: 'white', borderRadius: 8, padding: 16, maxWidth: 900, margin: '0 auto' }}>
           <h2>Confidential Batch Distribution</h2>
-          <p style={{ color: '#6b7280' }}>Enter recipients and amounts. Amounts are encrypted with Zama before submission.</p>
+                    <p style={{ color: '#6b7280' }}>Enter recipients and amounts. Amounts are encrypted with Zama before submission.</p>
+{/* 
+          <p style={{ color: '#6b7280' }}>
+            Enter recipients and token amounts (up to 6 decimal places). Maximum per entry: {MAX_DISPLAY_AMOUNT} cETH.
+          </p> */}
 
           {rows.map((r, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <input placeholder="0xRecipient" value={r.address} onChange={e => updateRow(i, 'address', e.target.value)} style={{ flex: 3, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }} />
-              <input placeholder="Amount (uint64)" value={r.amount} onChange={e => updateRow(i, 'amount', e.target.value)} style={{ flex: 1, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }} />
+              <input
+                placeholder="Amount (e.g., 0.1)"
+                value={r.amount}
+                onChange={e => updateRow(i, 'amount', e.target.value)}
+                style={{ flex: 1, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+              />
               <button onClick={() => removeRow(i)} style={{ padding: '8px 12px' }}>Remove</button>
             </div>
           ))}
@@ -203,7 +289,7 @@ export function DistributorApp() {
                 {decryptingUser ? 'Decrypting...' : 'Decrypt balance'}
               </button>
               {userDecryptedBalance && (
-                <p style={{ color: '#111827', marginTop: 8 }}>Decrypted balance: {userDecryptedBalance}</p>
+                <p style={{ color: '#111827', marginTop: 8 }}>Decrypted balance: {userDecryptedBalance} cETH</p>
               )}
             </>
           ) : (
@@ -216,14 +302,14 @@ export function DistributorApp() {
           <p style={{ color: '#6b7280' }}>Mint test cETH to your connected wallet.</p>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <input
-              placeholder="Amount"
+              placeholder="Amount (e.g., 0.5)"
               value={faucetAmount}
-              onChange={e => setFaucetAmount(e.target.value.replace(/[^0-9]/g, ''))}
+              onChange={e => setFaucetAmount(sanitizeAmountInput(e.target.value))}
               style={{ flex: 1, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
             />
             <button
               onClick={faucet}
-              disabled={!connected}
+              disabled={!connected || !faucetAmountValid}
               style={{ padding: '8px 12px' }}
             >
               Request faucet
@@ -245,7 +331,9 @@ export function DistributorApp() {
           {encBalanceHandle ? (
             <p style={{ color: '#6b7280', marginTop: 8 }}>Encrypted handle: {String(encBalanceHandle)}</p>
           ) : null}
-          {customDecryptedBalance && (<p style={{ color: '#111827', marginTop: 8 }}>Decrypted balance: {customDecryptedBalance}</p>)}
+          {customDecryptedBalance && (
+            <p style={{ color: '#111827', marginTop: 8 }}>Decrypted balance: {customDecryptedBalance} cETH</p>
+          )}
         </div>
       </main>
     </div>
