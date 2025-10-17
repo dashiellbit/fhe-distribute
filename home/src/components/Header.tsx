@@ -7,8 +7,8 @@ export function Header() {
       <div className="header-container">
         <div className="header-content">
           <div className="header-left">
-            <h1 className="header-title">Confidential Distributor</h1>
-            
+            <h1 className="header-title">FHE Distributor</h1>
+            <span className="header-badge">Powered by Zama</span>
           </div>
           <ConnectButton />
         </div>
