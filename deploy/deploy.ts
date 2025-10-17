@@ -24,7 +24,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Mint initial cETH balance to Distributor for distributions (example: 1,000,000 units)
   const signer = await hre.ethers.getSigner(deployer);
   const ceth = await hre.ethers.getContractAt("ConfidentialETH", deployedConfidentialETH.address, signer);
-  const mintTx = await ceth.mint(deployedDistributor.address, 1_000_000);
+  const mintTx = await ceth.mint(deployedDistributor.address, 1000_000_000);
   await mintTx.wait();
   console.log(`Minted initial cETH to Distributor`);
 };
