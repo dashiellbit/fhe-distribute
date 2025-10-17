@@ -6,8 +6,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deploy } = hre.deployments;
 
   // Deploy FHECounter (kept for template completeness)
-  const deployedFHECounter = await deploy("FHECounter", { from: deployer, log: true });
-  console.log(`FHECounter contract: `, deployedFHECounter.address);
+  // const deployedFHECounter = await deploy("FHECounter", { from: deployer, log: true });
+  // console.log(`FHECounter contract: `, deployedFHECounter.address);
 
   // Deploy ConfidentialETH
   const deployedConfidentialETH = await deploy("ConfidentialETH", { from: deployer, log: true });
