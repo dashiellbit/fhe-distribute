@@ -6,6 +6,7 @@ import { useEthersSigner } from '../hooks/useEthersSigner';
 import { useZamaInstance } from '../hooks/useZamaInstance';
 import { Header } from './Header';
 import { DISTRIBUTOR_ADDRESS, DISTRIBUTOR_ABI, CONFIDENTIAL_ETH_ABI, CONFIDENTIAL_ETH_ADDRESS } from '../config/contracts';
+import '../styles/DistributorApp.css';
 
 type Row = { address: string; amount: string };
 
@@ -243,96 +244,191 @@ export function DistributorApp() {
   return (
     <div className="distributor-app">
       <Header />
+
       <main className="main-content">
-        <div className="card" style={{ background: 'white', borderRadius: 8, padding: 16, maxWidth: 900, margin: '0 auto' }}>
-          <h2>Confidential Batch Distribution</h2>
-                    <p style={{ color: '#6b7280' }}>Enter recipients and amounts. Amounts are encrypted with Zama before submission.</p>
-{/* 
-          <p style={{ color: '#6b7280' }}>
-            Enter recipients and token amounts (up to 6 decimal places). Maximum per entry: {MAX_DISPLAY_AMOUNT} cETH.
-          </p> */}
+        {/* Batch Distribution Card */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-icon">📦</span>
+            <h2 className="card-title">Confidential Batch Distribution</h2>
+          </div>
+          <p className="card-description">
+            Distribute encrypted tokens to multiple recipients in a single transaction. All amounts are encrypted client-side using Zama FHE technology before being sent on-chain.
+          </p>
 
           {rows.map((r, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input placeholder="0xRecipient" value={r.address} onChange={e => updateRow(i, 'address', e.target.value)} style={{ flex: 3, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }} />
+            <div key={i} className="recipient-row">
               <input
-                placeholder="Amount (e.g., 0.1)"
+                placeholder="0xRecipient Address"
+                value={r.address}
+                onChange={e => updateRow(i, 'address', e.target.value)}
+                className="input-field input-address"
+              />
+              <input
+                placeholder="Amount"
                 value={r.amount}
                 onChange={e => updateRow(i, 'amount', e.target.value)}
-                style={{ flex: 1, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                className="input-field input-amount"
               />
-              <button onClick={() => removeRow(i)} style={{ padding: '8px 12px' }}>Remove</button>
+              {rows.length > 1 && (
+                <button onClick={() => removeRow(i)} className="button button-danger">
+                  🗑️
+                </button>
+              )}
             </div>
           ))}
-          <div style={{ marginTop: 8 }}>
-            <button onClick={addRow} style={{ padding: '8px 12px', marginRight: 8 }}>Add Row</button>
-            <button disabled={!canSend || sending} onClick={distribute} style={{ padding: '8px 12px' }}>
-              {sending ? 'Submitting...' : 'Distribute'}
+
+          <div className="button-group">
+            <button onClick={addRow} className="button button-secondary">
+              ➕ Add Recipient
+            </button>
+            <button
+              disabled={!canSend || sending}
+              onClick={distribute}
+              className="button button-primary"
+            >
+              {sending && <span className="loading-spinner"></span>}
+              {sending ? 'Distributing...' : '🚀 Distribute Tokens'}
             </button>
           </div>
-          {status && <p style={{ marginTop: 8, color: '#374151' }}>{status}</p>}
+
+          {status && (
+            <div className={`status-message ${
+              status.includes('Error') ? 'status-error' :
+              status.includes('confirmed') ? 'status-success' :
+              'status-info'
+            }`}>
+              {status}
+            </div>
+          )}
+
+          <div className="info-box">
+            <span className="info-icon">💡</span>
+            <div className="info-text">
+              Maximum amount per entry: {MAX_DISPLAY_AMOUNT} cETH. Supports up to 6 decimal places.
+            </div>
+          </div>
         </div>
 
-        <div className="card" style={{ background: 'white', borderRadius: 8, padding: 16, maxWidth: 900, margin: '16px auto' }}>
-          <h3>Your Encrypted Balance</h3>
+        {/* Your Balance Card */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-icon">💰</span>
+            <h2 className="card-title">Your Encrypted Balance</h2>
+          </div>
+
           {connected ? (
             <>
-              <p style={{ color: '#6b7280' }}>Connected wallet: {connected}</p>
-              <p style={{ color: '#6b7280', marginTop: 8 }}>
-                Encrypted handle: {userEncBalanceHandle ? String(userEncBalanceHandle) : 'Not available'}
-              </p>
+              <div className="connected-wallet">
+                <span className="wallet-icon">🔗</span>
+                <span className="wallet-address">{connected}</span>
+              </div>
+
+              <div className="balance-display">
+                <div className="balance-label">Encrypted Handle:</div>
+                <div className="balance-value">
+                  {userEncBalanceHandle ? String(userEncBalanceHandle) : 'Loading...'}
+                </div>
+              </div>
+
               <button
                 disabled={!userEncBalanceHandle || decryptingUser}
                 onClick={decryptUserBalance}
-                style={{ marginTop: 8, padding: '8px 12px' }}
+                className="button button-primary"
               >
-                {decryptingUser ? 'Decrypting...' : 'Decrypt balance'}
+                {decryptingUser && <span className="loading-spinner"></span>}
+                {decryptingUser ? 'Decrypting...' : '🔓 Decrypt My Balance'}
               </button>
+
               {userDecryptedBalance && (
-                <p style={{ color: '#111827', marginTop: 8 }}>Decrypted balance: {userDecryptedBalance} cETH</p>
+                <div className="balance-display" style={{ marginTop: '1rem' }}>
+                  <div className="balance-label">Decrypted Balance:</div>
+                  <div className="balance-decrypted">{userDecryptedBalance} cETH</div>
+                </div>
               )}
             </>
           ) : (
-            <p style={{ color: '#6b7280' }}>Connect a wallet to view your encrypted balance.</p>
+            <div className="empty-state">
+              <div className="empty-state-icon">🔌</div>
+              <p className="empty-state-text">Connect your wallet to view your encrypted balance</p>
+            </div>
           )}
         </div>
 
-        <div className="card" style={{ background: 'white', borderRadius: 8, padding: 16, maxWidth: 900, margin: '16px auto' }}>
-          <h3>Faucet</h3>
-          <p style={{ color: '#6b7280' }}>Mint test cETH to your connected wallet.</p>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        {/* Faucet Card */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-icon">🚰</span>
+            <h2 className="card-title">Test Token Faucet</h2>
+          </div>
+          <p className="card-description">
+            Get test cETH tokens for free. These tokens are encrypted and can be used for testing distributions.
+          </p>
+
+          <div className="input-group">
             <input
-              placeholder="Amount (e.g., 0.5)"
+              placeholder="Amount (e.g., 100)"
               value={faucetAmount}
               onChange={e => setFaucetAmount(sanitizeAmountInput(e.target.value))}
-              style={{ flex: 1, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+              className="input-field"
             />
             <button
               onClick={faucet}
               disabled={!connected || !faucetAmountValid}
-              style={{ padding: '8px 12px' }}
+              className="button button-primary"
             >
-              Request faucet
+              💧 Get Tokens
             </button>
           </div>
-          {faucetStatus ? (
-            <p style={{ marginTop: 8, color: faucetStatus.startsWith('Error') ? '#b91c1c' : '#374151' }}>{faucetStatus}</p>
-          ) : null}
+
+          {faucetStatus && (
+            <div className={`status-message ${
+              faucetStatus.includes('Error') ? 'status-error' : 'status-success'
+            }`}>
+              {faucetStatus}
+            </div>
+          )}
         </div>
 
-        <div className="card" style={{ background: 'white', borderRadius: 8, padding: 16, maxWidth: 900, margin: '16px auto' }}>
-          <h3>Check Balance (decrypt)</h3>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input placeholder="0xAddress" value={addressToCheck} onChange={e => setAddressToCheck(e.target.value)} style={{ flex: 1, padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }} />
-            <button disabled={!encBalanceHandle || decryptingCustom} onClick={decryptCustomBalance} style={{ padding: '8px 12px' }}>
-              {decryptingCustom ? 'Decrypting...' : 'Decrypt'}
+        {/* Check Any Balance Card */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-icon">🔍</span>
+            <h2 className="card-title">Check Any Address Balance</h2>
+          </div>
+          <p className="card-description">
+            Check the encrypted balance of any address. You can only decrypt if you own the address.
+          </p>
+
+          <div className="input-group">
+            <input
+              placeholder="0xAddress to check"
+              value={addressToCheck}
+              onChange={e => setAddressToCheck(e.target.value)}
+              className="input-field"
+            />
+            <button
+              disabled={!encBalanceHandle || decryptingCustom}
+              onClick={decryptCustomBalance}
+              className="button button-primary"
+            >
+              {decryptingCustom && <span className="loading-spinner"></span>}
+              {decryptingCustom ? 'Decrypting...' : '🔓 Decrypt'}
             </button>
           </div>
-          {encBalanceHandle ? (
-            <p style={{ color: '#6b7280', marginTop: 8 }}>Encrypted handle: {String(encBalanceHandle)}</p>
-          ) : null}
+
+          {encBalanceHandle && (
+            <div className="balance-display">
+              <div className="balance-label">Encrypted Handle:</div>
+              <div className="balance-value">{encBalanceHandle.toString()}</div>
+            </div>
+          )}
+
           {customDecryptedBalance && (
-            <p style={{ color: '#111827', marginTop: 8 }}>Decrypted balance: {customDecryptedBalance} cETH</p>
+            <div className="balance-display" style={{ marginTop: '1rem' }}>
+              <div className="balance-label">Decrypted Balance:</div>
+              <div className="balance-decrypted">{customDecryptedBalance} cETH</div>
+            </div>
           )}
         </div>
       </main>
