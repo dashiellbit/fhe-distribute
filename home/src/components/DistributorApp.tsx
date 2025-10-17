@@ -93,6 +93,15 @@ export function DistributorApp() {
     query: { enabled: !!connected },
   });
 
+  const encBalanceHandleStr = useMemo(
+    () => (encBalanceHandle != null ? String(encBalanceHandle) : ''),
+    [encBalanceHandle],
+  );
+  const userEncBalanceHandleStr = useMemo(
+    () => (userEncBalanceHandle != null ? String(userEncBalanceHandle) : ''),
+    [userEncBalanceHandle],
+  );
+
   const canSend = useMemo(() => {
     if (!connected || !instance) return false;
     return rows.every(row => {
@@ -202,13 +211,13 @@ export function DistributorApp() {
   };
 
   const decryptUserBalance = async () => {
-    if (!connected || !userEncBalanceHandle) return;
-    await decryptHandle(userEncBalanceHandle as string, connected, setUserDecryptedBalance, setDecryptingUser);
+    if (!connected || !userEncBalanceHandleStr) return;
+    await decryptHandle(userEncBalanceHandleStr, connected, setUserDecryptedBalance, setDecryptingUser);
   };
 
   const decryptCustomBalance = async () => {
-    if (!addressToCheck || !encBalanceHandle) return;
-    await decryptHandle(encBalanceHandle as string, addressToCheck, setCustomDecryptedBalance, setDecryptingCustom);
+    if (!addressToCheck || !encBalanceHandleStr) return;
+    await decryptHandle(encBalanceHandleStr, addressToCheck, setCustomDecryptedBalance, setDecryptingCustom);
   };
 
   const faucet = async () => {
@@ -327,12 +336,12 @@ export function DistributorApp() {
               <div className="balance-display">
                 <div className="balance-label">Encrypted Handle:</div>
                 <div className="balance-value">
-                  {userEncBalanceHandle ? String(userEncBalanceHandle) : 'Loading...'}
+                  {userEncBalanceHandleStr || 'Loading...'}
                 </div>
               </div>
 
               <button
-                disabled={!userEncBalanceHandle || decryptingUser}
+                disabled={!userEncBalanceHandleStr || decryptingUser}
                 onClick={decryptUserBalance}
                 className="button button-primary"
               >
@@ -408,7 +417,7 @@ export function DistributorApp() {
               className="input-field"
             />
             <button
-              disabled={!encBalanceHandle || decryptingCustom}
+              disabled={!encBalanceHandleStr || decryptingCustom}
               onClick={decryptCustomBalance}
               className="button button-primary"
             >
@@ -417,10 +426,10 @@ export function DistributorApp() {
             </button>
           </div>
 
-          {encBalanceHandle && (
+          {encBalanceHandleStr && (
             <div className="balance-display">
               <div className="balance-label">Encrypted Handle:</div>
-              <div className="balance-value">{encBalanceHandle.toString()}</div>
+              <div className="balance-value">{encBalanceHandleStr}</div>
             </div>
           )}
 
