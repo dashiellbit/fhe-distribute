@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {FHE, euint64, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
-import {IConfidentialFungibleToken} from "new-confidential-contracts/interfaces/IConfidentialFungibleToken.sol";
+import {ERC7984} from "confidential-contracts-v91/contracts/token/ERC7984/ERC7984.sol";
 
 /// @title Confidential Batch Distributor
 /// @notice Distributes confidential amounts of a ConfidentialFungibleToken to multiple recipients.
 /// @dev Amounts are supplied as encrypted inputs and consumed with FHE ACL.
-contract Distributor is SepoliaConfig {
-    IConfidentialFungibleToken public immutable token;
+contract Distributor is ZamaEthereumConfig {
+    ERC7984 public immutable token;
 
     /// @param _token Address of a ConfidentialFungibleToken-compliant token (e.g., ConfidentialETH)
     constructor(address _token) {
         require(_token != address(0), "invalid token");
-        token = IConfidentialFungibleToken(_token);
+        token = ERC7984(_token);
     }
 
     /// @notice Distribute encrypted amounts to recipients in a single call
